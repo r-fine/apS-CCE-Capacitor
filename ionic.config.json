@@ -1,0 +1,7 @@
+{
+  "name": "cropCut Insurance",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "custom"
+}
