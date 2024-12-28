@@ -1,5 +1,11 @@
 package bd.com.pranisheba.cce;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import android.widget.Toast;
+import android.webkit.GeolocationPermissions;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -19,6 +25,7 @@ public class MainActivity extends BridgeActivity {
 
     private ValueCallback<Uri[]> filePathCallback;
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,7 +36,7 @@ public class MainActivity extends BridgeActivity {
 
         // Enable JavaScript
         webView.getSettings().setJavaScriptEnabled(true);
-        
+
         // Enable file access
         webView.getSettings().setAllowFileAccess(true);
         webView.getSettings().setAllowContentAccess(true);
@@ -47,11 +54,13 @@ public class MainActivity extends BridgeActivity {
             }
         });
 
+        webView.getSettings().setGeolocationEnabled(true);
         webView.setWebChromeClient(new WebChromeClient() {
             // For Android 5.0+
             @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
             @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
                 if (MainActivity.this.filePathCallback != null) {
                     MainActivity.this.filePathCallback.onReceiveValue(null);
                 }
@@ -66,12 +75,48 @@ public class MainActivity extends BridgeActivity {
                 }
                 return true;
             }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                callback.invoke(origin, true, false);
+            }
         });
+        requestLocationPermission();
+    }
+
+    private void requestLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // Permission is not granted
+            ActivityCompat.requestPermissions(this,
+                    new String[] { Manifest.permission.ACCESS_FINE_LOCATION },
+                    LOCATION_PERMISSION_REQUEST_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+            String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case LOCATION_PERMISSION_REQUEST_CODE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // Permission was granted, proceed with location-related tasks
+                } else {
+                    // Permission denied, disable location functionality or inform the user
+                    Toast.makeText(this, "Location permission is required for this app to function.", Toast.LENGTH_LONG)
+                            .show();
+                }
+                return;
+            }
+            // ... handle other permissions if any ...
+        }
     }
 
     @Override
     public void onBackPressed() {
-        if(webView.canGoBack()) {
+        if (webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
@@ -91,7 +136,7 @@ public class MainActivity extends BridgeActivity {
                 if (data != null) {
                     String dataString = data.getDataString();
                     if (dataString != null) {
-                        results = new Uri[]{Uri.parse(dataString)};
+                        results = new Uri[] { Uri.parse(dataString) };
                     }
                 }
             }
