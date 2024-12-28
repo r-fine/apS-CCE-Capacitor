@@ -14,14 +14,25 @@ import android.webkit.WebChromeClient;
 import android.webkit.ValueCallback;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.getcapacitor.BridgeActivity;
+import android.webkit.WebSettings;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.content.Context;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 
 public class MainActivity extends BridgeActivity {
     private SwipeRefreshLayout swipeRefreshLayout;
     private WebView webView;
+    private LinearLayout errorLayout;
+    private Button retryButton;
 
     private ValueCallback<Uri[]> filePathCallback;
     private static final int FILE_CHOOSER_RESULT_CODE = 1;
@@ -33,7 +44,16 @@ public class MainActivity extends BridgeActivity {
         setContentView(R.layout.activity_main);
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         webView = findViewById(R.id.webView);
+        errorLayout = findViewById(R.id.errorLayout);
+        retryButton = findViewById(R.id.retryButton);
 
+        swipeRefreshLayout.setOnChildScrollUpCallback(new SwipeRefreshLayout.OnChildScrollUpCallback() {
+            @Override
+            public boolean canChildScrollUp(SwipeRefreshLayout parent, @Nullable View child) {
+                return webView.canScrollVertically(-1);
+            }
+        });
+        
         // Enable JavaScript
         webView.getSettings().setJavaScriptEnabled(true);
 
@@ -41,20 +61,48 @@ public class MainActivity extends BridgeActivity {
         webView.getSettings().setAllowFileAccess(true);
         webView.getSettings().setAllowContentAccess(true);
 
-        // Load the desired URL
-        webView.loadUrl("https://apscce.eu.pythonanywhere.com/");
+        // Enable Geolocation
+        webView.getSettings().setGeolocationEnabled(true);
 
-        swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
+        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        // Load the desired URL
+        loadWebView();
+
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            swipeRefreshLayout.setRefreshing(true);
+            webView.reload();
+        });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 swipeRefreshLayout.setRefreshing(false);
+                // Hide error layout on successful page load
+                errorLayout.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
                 super.onPageFinished(view, url);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                view.stopLoading(); // Stop loading the erroneous page
+                showErrorView(); // Display the custom error layout
+                super.onReceivedError(view, errorCode, description, failingUrl);
+            }
+
+            @RequiresApi(api = Build.VERSION_CODES.M)
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                    WebResourceResponse errorResponse) {
+                if (request.isForMainFrame()) {
+                    view.stopLoading(); // Stop loading the erroneous page
+                    showErrorView(); // Display the custom error layout
+                }
+                super.onReceivedHttpError(view, request, errorResponse);
             }
         });
 
-        webView.getSettings().setGeolocationEnabled(true);
         webView.setWebChromeClient(new WebChromeClient() {
             // For Android 5.0+
             @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -81,7 +129,35 @@ public class MainActivity extends BridgeActivity {
                 callback.invoke(origin, true, false);
             }
         });
+
+        // Retry button click listener
+        retryButton.setOnClickListener(v -> {
+            errorLayout.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
+            webView.reload();
+        });
+
         requestLocationPermission();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
+    }
+
+    private void loadWebView() {
+        if (isNetworkAvailable()) {
+            webView.loadUrl("https://apscce.eu.pythonanywhere.com/");
+        } else {
+            showErrorView();
+        }
+    }
+
+    private void showErrorView() {
+        swipeRefreshLayout.setRefreshing(false);
+        webView.setVisibility(View.GONE);
+        errorLayout.setVisibility(View.VISIBLE);
     }
 
     private void requestLocationPermission() {
